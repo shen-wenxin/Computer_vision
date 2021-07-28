@@ -58,77 +58,74 @@ class HandDetector():
         new_size = check_img_size(imgsz, s=self.stride)  # check image size
         return new_size
 
-    def inference(self, imgsz, dataset,
-                  classes,max_det, webcam,
-                  view_img,
+    def inference(self,
+                  classes,max_det,img
                   ):
-        if self.pt and self.device.type != 'cpu':
-            self.model(torch.zeros(1, 3, imgsz, imgsz).to(self.device).type_as(next(self.model.parameters())))  # run once
+        # Inference
+        pred = self.model(img, augment=False, visualize=False)[0]
 
-        for path, img, im0s, vid_cap in dataset:
-            if self.pt:
-                img = torch.from_numpy(img).to(self.device)
-                img = img.half() if self.half else img.float()  # uint8 to fp16/32
+        # NMS
+        conf_thres = 0.25
+        iou_thres = 0.45
+        agnostic_nms = False
+        pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
 
-            img /= 255.0  # 0 - 255 to 0.0 - 1.0
-            if len(img.shape) == 3:
-                img = img[None]  # expand for batch dim
-
-            # Inference
-            pred = self.model(img, augment=False, visualize=False)[0]
-
-            # NMS
-            conf_thres = 0.25
-            iou_thres = 0.45
-            agnostic_nms = False
-            pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
-
-            # Process predictions
-            for i, det in enumerate(pred):  # detections per image
-                if self.webcam:  # batch_size >= 1
-                    p, s, im0, frame = path[i], f'{i}: ', im0s[i].copy(), dataset.count
-                else:
-                    p, s, im0, frame = path, '', im0s.copy(), getattr(dataset, 'frame', 0)
-                p = Path(p)  # to Path
-                gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
-
-                if len(det):
-                    # Rescale boxes from img_size to im0 size
-                    det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
+        return pred
 
 
-                    # Write results
-                    for *xyxy, conf, cls in reversed(det):
-                        xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-
-                        if view_img:  # Add bbox to image
-                            c = int(cls)  # integer class
-                            label = f'{self.names[c]} {conf:.2f}'
-                            line_thickness = 3  # bounding box thickness (pixels)
-                            plot_one_box(xyxy, im0, label=label, color=colors(c, True), line_thickness=line_thickness)
-                        print("lable:", self.names[int(cls)])
-                        print("conf:", conf)
-                        print("xywh", xywh)
-
-                if view_img:
-                    cv2.imshow(str(p), im0)
-                    cv2.waitKey(1)  # 1 millisecond
 
 if __name__ == "__main__":
-    hand_detector = HandDetector()
+    device = "0"# cuda device, i.e. 0 or 0,1,2,3 or cpu
+    view_img = True
+    half = False  # use FP16 half-precision inference
+    hand_detector = HandDetector(device=device, half= half)
     hand_detector.load_model()
     imgsz = hand_detector.check_imapredge_size(imgsz=640)
     source_path = 'test.mp4'
+    webcam = source_path.isnumeric() or source_path.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
+
     dataset = LoadImages(source_path, imgsz)
-    hand_detector.inference(imgsz = imgsz, dataset=dataset,
-                            classes=None, max_det= 100, webcam=False,view_img=True)
+    for path, img, im0s, vid_cap in dataset:
 
 
+        img = torch.from_numpy(img).to(hand_detector.device)
+        img = img.half() if half else img.float()  # uint8 to fp16/32
+        img /= 255.0  # 0 - 255 to 0.0 - 1.0
+        if len(img.shape) == 3:
+            img = img[None]  # expand for batch dim
 
+        pred = hand_detector.inference(classes=None,max_det=100,img=img)
+        names = hand_detector.names
+        # Process predictions
+        for i, det in enumerate(pred):  # detections per image
+            if webcam:  # batch_size >= 1
+                p, s, im0, frame = path[i], f'{i}: ', im0s[i].copy(), dataset.count
+            else:
+                p, s, im0, frame = path, '', im0s.copy(), getattr(dataset, 'frame', 0)
+            p = Path(p)  # to Path
+            gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
 
+            if len(det):
+                # Rescale boxes from img_size to im0 size
+                det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
 
+                # Write results
+                for *xyxy, conf, cls in reversed(det):
+                    xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
 
+                    if view_img:  # Add bbox to image
+                        c = int(cls)  # integer class
+                        label = f'{names[c]} {conf:.2f}'
+                        line_thickness = 3  # bounding box thickness (pixels)
+                        plot_one_box(xyxy, im0, label=label, color=colors(c, True), line_thickness=line_thickness)
 
+                    cx, cy = int(xywh[0] * 1280), int(xywh[1] * 720)
+                    cv2.circle(im0, (cx, cy), 5, (255, 0, 0), cv2.FILLED)
+                    print("lable:",names[int(cls)])
+                    print("conf:", conf)
+                    print("xywh", xywh)
 
-
+            if view_img:
+                cv2.imshow(str(p), im0)
+                cv2.waitKey(1)  # 1 millisecond
 
