@@ -6,6 +6,7 @@ from pathlib import Path
 import cv2
 import torch
 import torch.backends.cudnn as cudnn
+import numpy as np
 
 FILE = Path(__file__).absolute()
 sys.path.append(FILE.parents[0].as_posix())  # add yolov5/ to path
@@ -16,12 +17,12 @@ from utils.general import check_img_size, check_requirements, check_imshow, colo
     apply_classifier, scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path, save_one_box
 from utils.plots import colors, plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_sync
+from utils.augmentations import letterbox
 
 @torch.no_grad()
 class HandDetector():
     def __init__(self,
                  weights='weights/best.pt',  # model.pt path(s)
-                 source='test.mp4',  # file/dir/URL/glob, 0 for webcam
                  device='0',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
                  line_thickness=3,  # bounding box thickness (pixels)
                  hide_labels=False,  # hide labels
@@ -29,14 +30,11 @@ class HandDetector():
                  half=False,  # use FP16 half-precision inference
                  ):
         self.weights = weights
-        self.source = source
         self.line_thickness = line_thickness
         self.hide_labels = hide_labels
         self.hide_conf = hide_conf
         self.half = half
 
-        # 0 : webcam
-        self.webcam = source.isnumeric()  or source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
 
         # Initialize
         set_logging()
@@ -72,6 +70,19 @@ class HandDetector():
 
         return pred
 
+def Load_images(img0,device, img_size = 640, stride = 32,half = False):
+    # Padded resize
+    img = letterbox(img0,img_size, stride=stride)[0]
+    # Convert
+    img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+    img = np.ascontiguousarray(img)
+    img = torch.from_numpy(img).to(device)
+    img = img.half() if half else img.float()  # uint8 to fp16/32
+    img /= 255.0  # 0 - 255 to 0.0 - 1.0
+    if len(img.shape) == 3:
+        img = img[None]  # expand for batch dim
+    return img
+
 
 
 if __name__ == "__main__":
@@ -87,7 +98,6 @@ if __name__ == "__main__":
     dataset = LoadImages(source_path, imgsz)
     for path, img, im0s, vid_cap in dataset:
 
-
         img = torch.from_numpy(img).to(hand_detector.device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -95,6 +105,7 @@ if __name__ == "__main__":
             img = img[None]  # expand for batch dim
 
         pred = hand_detector.inference(classes=None,max_det=100,img=img)
+
         names = hand_detector.names
         # Process predictions
         for i, det in enumerate(pred):  # detections per image
@@ -102,11 +113,14 @@ if __name__ == "__main__":
                 p, s, im0, frame = path[i], f'{i}: ', im0s[i].copy(), dataset.count
             else:
                 p, s, im0, frame = path, '', im0s.copy(), getattr(dataset, 'frame', 0)
+
             p = Path(p)  # to Path
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
 
+
             if len(det):
                 # Rescale boxes from img_size to im0 size
+                print()
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
 
                 # Write results
@@ -119,11 +133,14 @@ if __name__ == "__main__":
                         line_thickness = 3  # bounding box thickness (pixels)
                         plot_one_box(xyxy, im0, label=label, color=colors(c, True), line_thickness=line_thickness)
 
-                    cx, cy = int(xywh[0] * 1280), int(xywh[1] * 720)
+                    cx, cy = int(xywh[0] * 1280), int(xywh[1] * 720 )
+                    print("xywh[0], xywh[1]", xywh[0], xywh[1])
+                    print("cx,cy",cx,cy)
+                    exit(0)
                     cv2.circle(im0, (cx, cy), 5, (255, 0, 0), cv2.FILLED)
-                    print("lable:",names[int(cls)])
-                    print("conf:", conf)
-                    print("xywh", xywh)
+                    # print("lable:",names[int(cls)])
+                    # print("conf:", conf)
+                    # print("xywh", xywh)
 
             if view_img:
                 cv2.imshow(str(p), im0)

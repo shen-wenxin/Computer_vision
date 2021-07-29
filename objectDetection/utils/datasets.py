@@ -143,13 +143,13 @@ class _RepeatSampler(object):
         sampler (Sampler)
     """
 
-    def __init__(self, sampler):
+    def __init__(self, snpampler):
         self.sampler = sampler
 
     def __iter__(self):
         while True:
             yield from iter(self.sampler)
-
+np
 
 class LoadImages:  # for inference
     def __init__(self, path, img_size=640, stride=32):
@@ -315,7 +315,7 @@ class LoadStreams:  # multiple IP or RTSP cameras
             print('WARNING: Different stream shapes detected. For optimal performance supply similarly-shaped streams.')
 
     def update(self, i, cap):
-        # Read stream `i` frames in daemon thread
+        # Read stream `iLoadWebcam` frames in daemon thread
         n, f, read = 0, self.frames[i], 1  # frame number, frame array, inference every 'read' frame
         while cap.isOpened() and n < f:
             n += 1
