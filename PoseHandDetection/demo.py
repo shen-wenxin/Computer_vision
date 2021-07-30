@@ -30,8 +30,8 @@ def get_left_hand_pos(lmList):
     # cy = left_wrist.y
     # if you want to add some compute method,please add here
 
-    cx = lmList[left_wrist][1]
-    cy = lmList[left_wrist][2]
+    cx = lmList[left_wrist][1] if lmList  else 0
+    cy = lmList[left_wrist][2] if lmList  else 0
 
     return cx, cy
 def get_right_hand_pos(lmList):
@@ -50,12 +50,13 @@ def get_right_hand_pos(lmList):
     # cy = left_wrist.y
     # if you want to add some compute method,please add here
 
-    cx = lmList[right_wrist][1]
-    cy = lmList[right_wrist][2]
+    cx = lmList[right_wrist][1] if lmList else 0
+    cy = lmList[right_wrist][2] if lmList else 0
 
     return cx, cy
 def process_prediction(pred, img, im0, names):
     result = []
+    h,w,c = im0.shape
     for i, det in enumerate(pred):  # detections per image
         gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]
 
@@ -66,7 +67,7 @@ def process_prediction(pred, img, im0, names):
             for *xyxy, conf, cls in reversed(det):
                 xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
 
-                cx, cy = int(xywh[0] * 1280), int(xywh[1] * 720)
+                cx, cy = int(xywh[0] * w), int(xywh[1] * h)
                 lable = names[int(cls)]
                 confi = f'{conf:.2f}'
                 result.append([lable, confi, cx, cy])
@@ -110,7 +111,7 @@ def draw_result(object_result, rx,ry,lx,ly,img):
 
 if __name__ == '__main__':
     # source type: vedio or img or webcam.give the example of vedio and webcam
-    stype = "vedio"
+    stype = "webcam"    #webcam or vedio
     # demo1:vedio detection
     if stype == "vedio":
         """
@@ -119,18 +120,17 @@ if __name__ == '__main__':
             draw: show the infer result
             device :  cuda device, i.e. 0 or 0,1,2,3 or cpu
             half: use FP16 half-precision inference(yolo v5)
+            weights: yolov5 model
+            outPutDirName : result output
        
         """
         draw = True
         source = "../test_vedio/test.mp4"
-        device = "1"
+        device = "cpu"
         half = False
         weight = "../weights/hand_yolov5_best.pt"
+        outPutDirName = '../result/pic/'
 
-        outPutDirName = '../result/'
-
-        fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-        out = cv2.VideoWriter('result.mp4', fourcc, 30, (1280, 740))  # 写入视频
 
         cout = 0
         pTime = 0
@@ -182,6 +182,77 @@ if __name__ == '__main__':
             #save vedio
 
             cv2.waitKey(1)
+
+        cap.release()
+    elif stype == "webcam":
+        """
+        value:
+            draw: show the infer result
+            device :  cuda device, i.e. 0 or 0,1,2,3 or cpu
+            half: use FP16 half-precision inference(yolo v5)
+            weights: yolov5 model
+            outPutDirName : result output
+       
+        """
+        draw = True
+        device = "cpu"
+        half = False
+        weight = "../weights/hand_yolov5_best.pt"
+        outPutDirName = '../result/pic/'
+
+
+        cout = 0
+        pTime = 0
+        pose_detector = pm.poseDetector()   #human pose detector
+
+
+        hand_detector = hm.HandDetector(weights=weight, device=device, half=half)
+        hand_detector.load_model()
+        imgsz = hand_detector.check_imapredge_size(imgsz=640)# inference size (pixels)
+
+
+        cap = cv2.VideoCapture(0)
+
+        while cap.isOpened():
+            success, img0 = cap.read()
+            if not success:
+                print("Ignoring empty camera frame.")
+                continue
+
+            #yolov5
+            img1= hm.Load_images(img_size=imgsz, img0 = img0,device=hand_detector.device)
+            pred = hand_detector.inference(classes=None, max_det=100, img=img1)
+            object_result = process_prediction(pred=pred, img = img1, im0=img0,
+                                               names = hand_detector.names)
+            print(object_result)
+
+            #mediapipe
+            img2 = pose_detector.findPose(img0)
+            lmList = pose_detector.findPosition(img0)
+            lhx, lhy = get_left_hand_pos(lmList)    #left humen pose hand x,y
+            rhx, rhy = get_right_hand_pos(lmList)     #left humen pose hand x,y
+
+            # draw the result
+            draw_result(object_result= object_result, rx = rhx,ry=rhy, lx=lhx, ly= lhy, img =img0)
+
+
+
+            #time
+            cTime = time.time()
+            fps = 1 / (cTime - pTime)
+            pTime = cTime
+
+            cv2.putText(img0, str(int(fps)), (70, 50), cv2.FONT_HERSHEY_PLAIN, 3,
+                        (255, 0, 0), 3)
+
+            cv2.imwrite(outPutDirName + str(cout)+'.jpg', img0)
+            cout = cout + 1
+            cv2.imshow('Image', img0)
+
+            #save vedio
+
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
 
         cap.release()
 

@@ -24,15 +24,9 @@ class HandDetector():
     def __init__(self,
                  weights='weights/best.pt',  # model.pt path(s)
                  device='0',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
-                 line_thickness=3,  # bounding box thickness (pixels)
-                 hide_labels=False,  # hide labels
-                 hide_conf=False,  # hide confidences
                  half=False,  # use FP16 half-precision inference
                  ):
         self.weights = weights
-        self.line_thickness = line_thickness
-        self.hide_labels = hide_labels
-        self.hide_conf = hide_conf
         self.half = half
 
 
