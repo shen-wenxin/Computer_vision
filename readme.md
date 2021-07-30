@@ -50,6 +50,8 @@
 
 ·首先请参照`objectDetection/requirement.txt`，配置``yolov5``所需环境。
 
+  其中`torch`的配置请根据[官网](https://pytorch.org/get-started/previous-versions/)进行配置。
+
 ·然后配置`mediapipe`所需环境:`pip install mediapipe`
 
 ### 快速开始
@@ -341,3 +343,8 @@ Minimum confidence value (`[0.0, 1.0]`) from the landmark-tracking model for the
 
 ​	也参考了[yolov5](https://github.com/ultralytics/yolov5)
 
+## 参考文档
+
+·MediaPipe:[python](https://google.github.io/mediapipe/solutions/pose)
+
+·yolov5:[由其的detect.py改写](https://github.com/ultralytics/yolov5/blob/master/detect.py)
